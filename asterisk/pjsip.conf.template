@@ -1,0 +1,33 @@
+; Rendered to /etc/asterisk/pjsip.conf by entrypoint.sh, which substitutes
+; __SIP_USER__ / __SIP_PASSWORD__ (env SIP_USER / SIP_PASSWORD, or a
+; generated-once password persisted at /opt/zorkpbx/.sip_password).
+;
+; One SIP extension, UDP only, no encryption — this is a toy/demo PBX for
+; reaching ZorkPBX, not a hardened production trunk. Keep it behind a
+; firewall / don't expose 5060/udp to the open internet.
+
+[transport-udp]
+type=transport
+protocol=udp
+bind=0.0.0.0:5060
+
+[__SIP_USER__]
+type=endpoint
+context=internal
+disallow=all
+allow=ulaw
+allow=alaw
+auth=__SIP_USER__
+aors=__SIP_USER__
+direct_media=no
+
+[__SIP_USER__]
+type=auth
+auth_type=userpass
+username=__SIP_USER__
+password=__SIP_PASSWORD__
+
+[__SIP_USER__]
+type=aor
+max_contacts=1
+remove_existing=yes

@@ -1,0 +1,17 @@
+services:
+  zorkpbx:
+    build: .
+    image: zorkpbx-docker
+    ports:
+      - "5060:5060/udp"
+      - "10000-10020:10000-10020/udp"
+    volumes:
+      - ./saves:/opt/zorkpbx/saves
+      - zorkpbx-audio:/opt/zorkpbx/audio
+    environment:
+      SIP_USER: "6001"
+      SIP_PASSWORD: "infocom"
+    restart: unless-stopped
+
+volumes:
+  zorkpbx-audio:
