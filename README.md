@@ -16,7 +16,7 @@ podman machine start
 ## Build
 
 ```bash
-docker build -t zorkpbx-docker .
+podman build -t zorkpbx-docker .
 ```
 
 ## Run
