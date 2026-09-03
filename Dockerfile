@@ -17,7 +17,17 @@ ARG ALPINE_VERSION=3.23
 ARG ZORKPBX_REF=c899cf1c022f28e5138fc11f3a9123ec6628bf0f
 ARG FROTZ_REF=2.55
 ARG WHISPER_CPP_REF=v1.9.2
-ARG WHISPER_MODEL=tiny
+# Speech recognition quality is the limiting factor here, not speed: callers
+# arrive as 8 kHz mu-law, which is the narrowest, lossiest input whisper ever
+# sees, and game commands are short. `tiny` returns fluent, confident, wrong
+# English on that material ("west" -> "I don't believe this."). `small` is the
+# first size that holds up, and a turn of at most six seconds still transcribes
+# in a couple of seconds.
+#
+# It costs ~390 MB of image over tiny. Build with --build-arg WHISPER_MODEL=base
+# (~148 MB) or =tiny (~75 MB) to trade accuracy back for size; the model
+# directory can also be bind-mounted to supply your own.
+ARG WHISPER_MODEL=small
 ARG PIPER_VERSION=2023.11.14-2
 ARG PIPER_VOICE=en_US-norman-medium
 ARG GLIBC_VERSION=2.35-r1

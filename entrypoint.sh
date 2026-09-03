@@ -96,6 +96,33 @@ if [ -x /usr/local/bin/whisper-cli ]; then
   fi
 fi
 
+# ── Optional: keep the audio sent to speech recognition ────────────────────
+# The AGI deletes its temporary recording the moment it has a transcript, so
+# "it misheard me" is impossible to investigate after the fact. Setting
+# ZORKPBX_DEBUG_KEEP_AUDIO=1 wraps whisper-cli to copy each recording into
+# saves/debug-audio/, which is normally a mounted volume and so outlives the
+# container. Off by default; the wrapper only ever adds a copy.
+if [ -n "${ZORKPBX_DEBUG_KEEP_AUDIO:-}" ] && [ -x /usr/local/bin/whisper-cli ]; then
+  mkdir -p /opt/zorkpbx/saves/debug-audio
+  chown asterisk:asterisk /opt/zorkpbx/saves/debug-audio 2>/dev/null || true
+  if [ ! -f /usr/local/bin/whisper-cli.real ]; then
+    mv /usr/local/bin/whisper-cli /usr/local/bin/whisper-cli.real
+    cat > /usr/local/bin/whisper-cli <<'WHISPER_WRAPPER'
+#!/bin/sh
+prev=""
+for a in "$@"; do
+  if [ "$prev" = "-f" ] && [ -f "$a" ]; then
+    cp "$a" "$(mktemp -p /opt/zorkpbx/saves/debug-audio rec-XXXXXX).wav" 2>/dev/null || true
+  fi
+  prev="$a"
+done
+exec /usr/local/bin/whisper-cli.real "$@"
+WHISPER_WRAPPER
+    chmod 755 /usr/local/bin/whisper-cli
+  fi
+  log "debug: keeping STT recordings in saves/debug-audio/"
+fi
+
 # ── SIP credentials ────────────────────────────────────────────────────────
 SIP_USER="${SIP_USER:-6001}"
 case "${SIP_USER}" in

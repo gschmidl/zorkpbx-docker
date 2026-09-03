@@ -9,7 +9,9 @@ Zork I/II/III bundled. Register a softphone, dial **5001**, and play by
 keypad — or hold `1` and just say what you want to do.
 
 Nothing phones home: TTS and speech recognition both run locally in the
-container.
+container. That is most of its ~770 MB — the `small` whisper model is 466 MB of
+it, and `--build-arg WHISPER_MODEL=base` or `=tiny` trades recognition accuracy
+back for size.
 
 ## Quick start
 
@@ -83,6 +85,7 @@ Mount points worth knowing:
 | `/opt/zorkpbx/saves` | Game saves, one per caller ID. Mount this to keep progress |
 | `/opt/zorkpbx/audio` | TTS cache. Large and regenerable — a named volume is ideal |
 | `/opt/zorkpbx/games` | Zork I/II/III, already baked in. Mount only to substitute your own `.DAT`/`.z5` files |
+| `/usr/local/share/whisper-models` | The bundled `ggml-*.bin`. Mount to supply a different model, then set `ZORKPBX_WHISPER_MODEL` |
 
 ## Platform support
 
@@ -114,7 +117,7 @@ Useful build arguments:
 | `WITH_BUNDLED_ZORK` | `1` | `0` ships no game files; mount your own into `/opt/zorkpbx/games` |
 | `ALPINE_VERSION` | `3.23` | Base image tag |
 | `PIPER_VOICE` | `en_US-norman-medium` | Any voice from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) `en/en_US` |
-| `WHISPER_MODEL` | `tiny` | `tiny`, `base` or `small` — bigger is more accurate and slower |
+| `WHISPER_MODEL` | `small` | `tiny` (~75 MB), `base` (~148 MB) or `small` (~466 MB). Bigger is markedly more accurate on 8 kHz telephone audio, and slower |
 
 Smallest useful build:
 
