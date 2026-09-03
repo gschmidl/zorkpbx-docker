@@ -1,10 +1,12 @@
-.git
-games/
-*.DAT
-*.z1
-*.z2
-*.z3
-*.z4
-*.z5
-*.z6
-*.z8
+# Allowlist. The Dockerfile only ever COPYs entrypoint.sh and asterisk/*, so
+# everything else is excluded: the build context stays a few KB, and editing
+# the README or compose file can never invalidate a build-cache layer.
+*
+
+!entrypoint.sh
+!asterisk/
+
+# ...but never ship a rendered config or a stray secret even if one appears
+# in asterisk/.
+asterisk/pjsip.conf
+**/.sip_password

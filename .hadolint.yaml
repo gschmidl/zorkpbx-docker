@@ -1,0 +1,23 @@
+# Rules deliberately disabled, with the reason. Everything else is enforced at
+# `warning` level by .github/workflows/build.yml, so a *new* warning fails CI.
+ignored:
+  # "Pin versions in apk add". Alpine's repositories only ever carry the
+  # current version of a package, so an explicit =<version> pin starts failing
+  # the build the moment Alpine bumps it. The Alpine release itself is pinned
+  # instead, via ARG ALPINE_VERSION.
+  - DL3018
+
+  # "Use WORKDIR to switch to a directory". The `cd`s here are scoped to a
+  # single RUN and are deliberately not sticky; WORKDIR would leak the
+  # directory into every later layer.
+  - DL3003
+
+  # "ref is referenced but not assigned" — false positive. `ref` is assigned by
+  # the preceding `eval "ref=\${ZORK${n}_REF}"`, which shellcheck cannot see
+  # through.
+  - SC2154
+
+  # "Use arguments JSON notation for CMD and ENTRYPOINT". The only shell-form
+  # command is HEALTHCHECK CMD, which needs a shell for `|| exit 1`. The real
+  # ENTRYPOINT is already in JSON form.
+  - DL3025
