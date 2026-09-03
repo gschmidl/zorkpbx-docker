@@ -25,6 +25,25 @@ if not defined ENGINE (
 )
 echo Using %ENGINE%.
 
+rem ── Is the engine actually up? ───────────────────────────────────────────
+rem A fresh Podman install has no virtual machine until `podman machine init`,
+rem and Docker Desktop may simply not be running. Both fail every later step
+rem with errors that read like a network or registry problem, so check once and
+rem say what is actually wrong.
+%ENGINE% info >nul 2>&1
+if errorlevel 1 (
+  echo.
+  echo %ENGINE% is installed but not responding.
+  if /i "%ENGINE%"=="podman" (
+    echo Run these once, then start this script again:
+    echo   podman machine init
+    echo   podman machine start
+  ) else (
+    echo Start Docker Desktop and wait for it to report "running", then try again.
+  )
+  exit /b 1
+)
+
 if not exist "saves" mkdir "saves"
 
 rem ── Always pull ──────────────────────────────────────────────────────────
