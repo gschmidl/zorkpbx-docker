@@ -1,3 +1,11 @@
-saves/*.sav
-saves/*.qzl
+# Local configuration
+.env
+
+# Runtime state produced by the container
+saves/*
+!saves/.gitkeep
 games/
+audio/
+
+# A rendered pjsip.conf contains the SIP password
+asterisk/pjsip.conf
