@@ -1,0 +1,23 @@
+# Git for Windows defaults to core.autocrlf=true, which rewrites LF to CRLF on
+# checkout. Everything below is copied verbatim into a Linux container, where
+# a stray CR is fatal — a CRLF entrypoint.sh fails with
+#   /entrypoint.sh: line 2: $'\r': command not found
+# and a CRLF Dockerfile/asterisk config confuses their parsers. Pin them to LF
+# regardless of the cloning machine's settings.
+* text=auto eol=lf
+
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.conf      text eol=lf
+*.template  text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+# Windows-only helper: CRLF is correct here.
+*.bat       text eol=crlf
+
+# Never touch binaries.
+*.DAT       binary
+*.qzl       binary
+*.onnx      binary
+*.png       binary
