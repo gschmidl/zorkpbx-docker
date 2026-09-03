@@ -331,6 +331,37 @@ COPY asterisk/rtp.conf /etc/asterisk/rtp.conf
 RUN cp /opt/zorkpbx/asterisk/extensions_zorkpbx.conf /etc/asterisk/extensions_zorkpbx.conf
 
 RUN id asterisk >/dev/null 2>&1 || adduser -D -H -s /sbin/nologin asterisk
+
+# --- Prompt sounds: keep <astdatadir>/sounds authoritative -----------------
+# Alpine 3.21+ moved the packaged prompts from /var/lib/asterisk/sounds (where
+# 3.20 put them) to /usr/share/asterisk/sounds, but asterisk-sample-config
+# still ships astdatadir => /var/lib/asterisk. Asterisk therefore looks for
+# prompts under a directory that no longer holds them and cannot find "beep".
+#
+# That is not cosmetic. The AGI calls RECORD FILE with the BEEP option, and a
+# missing beep makes RECORD FILE abort the whole recording instead of just
+# skipping the tone — so voice input answers "Sorry, I didn't catch that"
+# instantly, without ever listening.
+#
+# /var/lib/asterisk/sounds must also remain a real, writable directory: the
+# AGI records its temporary wav straight into it. So: real dir, owned by
+# asterisk, with the packaged per-language prompt dirs symlinked in. Works
+# under either Alpine layout. The assertion fails the build loudly if a future
+# base image moves them again.
+RUN set -e; \
+    mkdir -p /var/lib/asterisk/sounds; \
+    for d in /usr/share/asterisk/sounds/*/; do \
+      [ -d "$d" ] && ln -sfn "${d%/}" "/var/lib/asterisk/sounds/$(basename "${d%/}")"; \
+    done; \
+    true; \
+    chown asterisk:asterisk /var/lib/asterisk/sounds; \
+    if [ ! -e /var/lib/asterisk/sounds/en/beep.gsm ]; then \
+      echo "FATAL: no beep prompt under /var/lib/asterisk/sounds/en (astdatadir)." >&2; \
+      echo "       RECORD FILE would abort every voice command. Prompts found at:" >&2; \
+      { find / -name 'beep.gsm' -not -path '/proc/*' 2>/dev/null; } >&2; \
+      exit 1; \
+    fi
+
 RUN mkdir -p /var/log/asterisk /var/spool/asterisk /var/run/asterisk \
     && chown -R asterisk:asterisk \
          /var/log/asterisk /var/spool/asterisk /var/run/asterisk \
