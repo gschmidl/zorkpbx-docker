@@ -197,11 +197,28 @@ jobs:
 
       # amd64 is required; arm64 is a bonus. Missing arm64 is a red run but the
       # image is already published and usable.
+      #
+      # Retried because GHCR resolves a freshly pushed tag with a lag of a few
+      # seconds: reading it immediately returns the *previous* index, which
+      # made this step report the old amd64-only manifest and fail a run whose
+      # image was in fact correct. "unknown/unknown" entries (attestation
+      # manifests) are filtered out rather than counted as platforms.
       - name: Verify published platforms
         run: |
-          platforms="$(docker buildx imagetools inspect \
-            "${REGISTRY}/${IMAGE_NAME}:${VERSION}" --format '{{json .Manifest}}' \
-            | jq -r '[.manifests[].platform | "\(.os)/\(.architecture)"] | join(" ")')"
+          platforms=""
+          for attempt in $(seq 1 10); do
+            platforms="$(docker buildx imagetools inspect \
+              "${REGISTRY}/${IMAGE_NAME}:${VERSION}" --format '{{json .Manifest}}' 2>/dev/null \
+              | jq -r '[.manifests[].platform | "\(.os)/\(.architecture)"]
+                       | map(select(. != "unknown/unknown")) | join(" ")')" || platforms=""
+            echo "attempt ${attempt}: ${platforms:-<none>}"
+            case " ${platforms} " in
+              *" linux/amd64 "*)
+                case " ${platforms} " in *" linux/arm64 "*) break ;; esac ;;
+            esac
+            sleep 6
+          done
+
           echo "Published platforms: ${platforms}"
           case " ${platforms} " in
             *" linux/amd64 "*) ;;
