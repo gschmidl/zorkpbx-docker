@@ -35,16 +35,29 @@ if not defined SIP_PASSWORD set "SIP_PASSWORD=infocom"
 
 if not exist "saves" mkdir "saves"
 
-rem ── Pull unless the image is already local ───────────────────────────────
-%ENGINE% image exists %IMAGE% >nul 2>&1
-if errorlevel 1 (
+rem ── Always pull ──────────────────────────────────────────────────────────
+rem The tag is :latest, so "is it already local?" is the wrong question — a
+rem stale local copy is exactly how you end up running a months-old image and
+rem wondering why a fix did not take. Pulling an up-to-date image only costs a
+rem manifest check. Set SKIP_PULL=1 to work offline.
+rem
+rem (`image inspect` rather than `image exists`: the latter is podman-only,
+rem so this branch silently did the wrong thing under Docker.)
+if defined SKIP_PULL (
+  echo Skipping pull ^(SKIP_PULL is set^).
+) else (
   echo Pulling %IMAGE% ...
   %ENGINE% pull %IMAGE%
   if errorlevel 1 (
-    echo.
-    echo Could not pull the image. To build it locally instead:
-    echo   %ENGINE% build -t %IMAGE% .
-    exit /b 1
+    %ENGINE% image inspect %IMAGE% >nul 2>&1
+    if errorlevel 1 (
+      echo.
+      echo Could not pull %IMAGE%, and there is no local copy.
+      echo To build it locally instead:
+      echo   %ENGINE% build -t %IMAGE% .
+      exit /b 1
+    )
+    echo Pull failed - falling back to the local copy.
   )
 )
 
@@ -74,7 +87,10 @@ if errorlevel 1 (
 
 echo.
 echo zorkpbx is up. Waiting for it to report its SIP credentials...
-timeout /t 4 /nobreak >nul
+rem `ping`, not `timeout`: timeout aborts with "input redirection is not
+rem supported" whenever this script runs with stdin redirected (a pipe, a CI
+rem step, or cmd /c from another shell).
+ping -n 6 127.0.0.1 >nul 2>&1
 %ENGINE% logs %NAME% 2>&1 | findstr /c:"[zorkpbx]"
 
 echo.

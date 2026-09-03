@@ -172,13 +172,21 @@ RUN git clone -q --depth 1 --branch "${FROTZ_REF}" \
     && install -Dm755 /src/frotz/dfrotz /out/bin/dfrotz
 
 # --- whisper.cpp: local speech-to-text for the "press 1 to speak" path -----
+# GGML_NATIVE=OFF is load-bearing. ggml defaults it to ON, which compiles with
+# -march=native and bakes the *build* machine's instruction set into the
+# binary. That is fine when you build on the machine you run on, and fatal for
+# a published image: a CI runner with AVX-512 produces a whisper-cli that dies
+# with SIGILL ("Illegal instruction", surfacing as rc=-4) on any CPU without
+# it, so every spoken command fails while the rest of the image looks healthy.
+# Portability beats a few hundred milliseconds here — the tiny model on at
+# most six seconds of 16 kHz audio is quick even on a baseline build.
 RUN mkdir -p /out/bin /out/whisper-models \
     && touch /out/whisper-models/.keep \
     && if [ "${WITH_WHISPER}" = "1" ]; then \
          git clone -q --depth 1 --branch "${WHISPER_CPP_REF}" \
            https://github.com/ggerganov/whisper.cpp.git /src/whisper.cpp \
          && cmake -S /src/whisper.cpp -B /src/whisper.cpp/build \
-              -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
+              -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF \
          && cmake --build /src/whisper.cpp/build --config Release -j"$(nproc)" \
          && install -Dm755 /src/whisper.cpp/build/bin/whisper-cli /out/bin/whisper-cli \
          && sh /src/whisper.cpp/models/download-ggml-model.sh "${WHISPER_MODEL}" /out/whisper-models ; \

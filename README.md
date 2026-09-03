@@ -175,6 +175,29 @@ piper; check `docker logs zorkpbx | grep "TTS engine"`. On arm64 there is no
 piper (see Platform support), and `ZORKPBX_TTS_ENGINE=piper` will refuse to
 start rather than pretend.
 
+**The voice changes between phrases.** The TTS cache is keyed on the text
+alone, so a clip synthesised by one engine keeps replaying in that engine's
+voice forever. Each engine and piper voice now gets its own cache
+subdirectory, but a volume written before that change still holds loose
+`.ulaw` files at its root. They are pure cache — delete them:
+
+```bash
+docker compose down && docker volume rm zorkpbx-audio
+```
+
+**Every spoken command answers "Sorry, I didn't catch that", but the beep
+plays.** The recording is fine and speech recognition is failing. Check the
+startup line:
+
+```bash
+docker logs zorkpbx | grep "voice input"
+```
+
+`voice input: ready` means whisper works. A self-test failure reports the exit
+code; 132 (SIGILL) means whisper-cli needs CPU instructions this machine does
+not have. Voice input requires an x86-64 CPU with **AVX2/FMA** (anything since
+roughly 2013) or any arm64. The keypad works regardless.
+
 ## Security
 
 This is a toy PBX. It speaks plain UDP SIP with no TLS or SRTP, and it exists to

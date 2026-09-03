@@ -41,11 +41,59 @@ fi
 export ZORKPBX_TTS_ENGINE
 log "TTS engine: ${ZORKPBX_TTS_ENGINE}"
 
+# The TTS cache is keyed on a hash of the text alone — not the engine, not the
+# voice. So a clip synthesised by espeak keeps replaying in espeak forever,
+# even after switching to piper, and with the audio directory on a persistent
+# volume that sounds like the voice changing at random from phrase to phrase.
+# Give each engine (and each piper voice) its own subdirectory so two voices
+# can never share a cache.
+audio_tag="${ZORKPBX_TTS_ENGINE}"
+if [ "${ZORKPBX_TTS_ENGINE}" = "piper" ] && [ -n "${ZORKPBX_PIPER_MODEL:-}" ]; then
+  audio_tag="piper-$(basename "${ZORKPBX_PIPER_MODEL}" .onnx)"
+fi
+ZORKPBX_AUDIO_DIR="${ZORKPBX_AUDIO_DIR:-/opt/zorkpbx/audio}"
+export ZORKPBX_AUDIO_DIR="${ZORKPBX_AUDIO_DIR%/}/${audio_tag}"
+mkdir -p "$ZORKPBX_AUDIO_DIR"
+chown asterisk:asterisk "$ZORKPBX_AUDIO_DIR" 2>/dev/null || true
+log "TTS cache: ${ZORKPBX_AUDIO_DIR}"
+
 if [ "${ZORKPBX_TTS_ENGINE}" = "piper" ]; then
   [ -x /usr/local/bin/piper ] \
     || die "ZORKPBX_TTS_ENGINE=piper but this image has no piper binary (arm64 or WITH_PIPER=0 build). Use espeak."
   [ -f "${ZORKPBX_PIPER_MODEL:-}" ] \
     || die "ZORKPBX_TTS_ENGINE=piper but the voice model is missing: ${ZORKPBX_PIPER_MODEL:-<unset>}"
+fi
+
+# ── Speech-to-text self-check ──────────────────────────────────────────────
+# whisper-cli is compiled from source. If it was built for a wider instruction
+# set than this CPU provides it dies with SIGILL, and that only shows up once a
+# caller actually speaks — as "Sorry, I didn't catch that" on every command,
+# with a bare rc=-4 in the log. Exercise it once here so the problem is
+# obvious at startup instead. Non-fatal: the keypad still works.
+if [ -x /usr/local/bin/whisper-cli ]; then
+  whisper_model_file="${ZORKPBX_WHISPER_MODEL_DIR:-/usr/local/share/whisper-models}/ggml-${ZORKPBX_WHISPER_MODEL:-tiny}.bin"
+  if [ ! -f "$whisper_model_file" ]; then
+    log "WARNING: whisper model missing (${whisper_model_file}) — voice input will not work"
+  else
+    probe_dir="$(mktemp -d)"
+    probe_rc=0
+    sox -n -r 16000 -c 1 "${probe_dir}/probe.wav" trim 0.0 0.3 >/dev/null 2>&1 || probe_rc=$?
+    if [ "$probe_rc" -eq 0 ]; then
+      whisper-cli -m "$whisper_model_file" -f "${probe_dir}/probe.wav" \
+        -l en --no-timestamps --no-prints >/dev/null 2>&1 || probe_rc=$?
+    fi
+    if [ "$probe_rc" -eq 0 ]; then
+      log "voice input: ready (whisper ${ZORKPBX_WHISPER_MODEL:-tiny})"
+    else
+      log "WARNING: whisper-cli self-test failed (exit ${probe_rc}) — voice input"
+      log "         will answer \"Sorry, I didn't catch that\" for every command."
+      if [ "$probe_rc" -eq 132 ] || [ "$probe_rc" -eq 4 ]; then
+        log "         SIGILL: this binary was built for a wider instruction set"
+        log "         than this CPU provides. Rebuild with -DGGML_NATIVE=OFF."
+      fi
+    fi
+    rm -rf "$probe_dir"
+  fi
 fi
 
 # ── SIP credentials ────────────────────────────────────────────────────────
