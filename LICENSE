@@ -31,6 +31,5 @@ and bundles is licensed separately by its own authors:
                          (LICENSE for each is shipped in /opt/zorkpbx/games)
   Frotz        GPL-2.0   https://gitlab.com/DavidGriffith/frotz
   whisper.cpp  MIT       https://github.com/ggerganov/whisper.cpp
-  piper        MIT       https://github.com/rhasspy/piper
   Asterisk     GPL-2.0   https://www.asterisk.org
   Alpine Linux and its packages, under their respective licenses.

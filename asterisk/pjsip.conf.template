@@ -1,13 +1,10 @@
 ; Rendered to /etc/asterisk/pjsip.conf by entrypoint.sh, which fills in the
-; user and password tokens below from env SIP_USER / SIP_PASSWORD, or from a
-; generated-once password persisted at /opt/zorkpbx/saves/.sip_password.
+; user and password tokens below from env SIP_USER / SIP_PASSWORD.
 ;
 ; (Deliberately no placeholder tokens in this comment block: they would be
 ; substituted too, echoing the password into a comment.)
 ;
-; Lines beginning "#IF:VAR#" are emitted only when that environment variable
-; is non-empty; the prefix itself is stripped. Substitution is literal, so a
-; password containing / or & is safe here.
+; Substitution is literal, so a password containing / or & is safe here.
 ;
 ; One SIP extension, UDP only, no encryption — this is a toy/demo PBX for
 ; reaching ZorkPBX, not a hardened production trunk. Keep it behind a
@@ -17,13 +14,6 @@
 type=transport
 protocol=udp
 bind=0.0.0.0:5060
-; NAT: inside a container Asterisk only knows its private container IP and
-; will advertise that in SDP, so a phone on the LAN sends RTP into the void
-; and you get one-way or silent audio. Set SIP_EXTERNAL_IP to the address the
-; phone actually dials (the Docker/Podman host) to fix that.
-#IF:SIP_EXTERNAL_IP#external_media_address=__SIP_EXTERNAL_IP__
-#IF:SIP_EXTERNAL_IP#external_signaling_address=__SIP_EXTERNAL_IP__
-#IF:SIP_LOCAL_NET#local_net=__SIP_LOCAL_NET__
 
 [__SIP_USER__]
 type=endpoint

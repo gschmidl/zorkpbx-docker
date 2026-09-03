@@ -4,14 +4,12 @@ Zork I, II and III over a phone line, in one container.
 
 The smallest practical image that runs [ZorkPBX](https://github.com/aejx00/zorkpbx):
 Alpine Linux + Asterisk (PJSIP) + `dfrotz` (built from source, no curses) +
-espeak + sox + piper (neural TTS) + whisper.cpp (local speech-to-text), with
-Zork I/II/III bundled. Register a softphone, dial **5001**, and play by
-keypad — or hold `1` and just say what you want to do.
+espeak + sox + whisper.cpp (local speech-to-text), with Zork I/II/III bundled.
+Register a softphone, dial **5001**, and play by keypad — or press `1` and say
+what you want to do.
 
-Nothing phones home: TTS and speech recognition both run locally in the
-container. That is most of its ~770 MB — the `small` whisper model is 466 MB of
-it, and `--build-arg WHISPER_MODEL=base` or `=tiny` trades recognition accuracy
-back for size.
+Nothing phones home: speech synthesis and recognition both run locally in the
+container.
 
 ## Quick start
 
@@ -30,8 +28,8 @@ password **`infocom`**, and dial **5001**.
 ### Windows
 
 `run.bat` does all of the above. It picks up Podman or Docker automatically,
-creates `saves\`, pulls the image if it is not already local, and prints the
-credentials when the container is up.
+creates `saves\`, pulls the current image, and prints the credentials once the
+container is up.
 
 ```
 winget install -e --id RedHat.Podman
@@ -40,13 +38,11 @@ podman machine start
 run.bat
 ```
 
-Copy `.env.example` to `.env` first if you want to pin your own extension
-number or password.
+Edit the two `set` lines at the top of `run.bat` to change the credentials.
 
 ### Docker Compose (any platform)
 
 ```bash
-cp .env.example .env      # optional — the defaults work
 docker compose pull
 docker compose up -d
 ```
@@ -61,46 +57,38 @@ docker compose up -d
 
 ## Configuration
 
-Every setting is an environment variable. With Compose, put them in `.env`;
-with `docker run`, pass them as `-e NAME=value`.
+Every setting is an environment variable — pass them as `-e NAME=value`, or put
+them under `environment:` in `docker-compose.yml`.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `SIP_USER` | `6001` | Extension the softphone registers as |
 | `SIP_PASSWORD` | `infocom` | Fixed, so credentials are identical on every machine and restart. Change it for anything less private than your own LAN |
-| `SIP_EXTERNAL_IP` | *(empty)* | Address the phone dials. Set this if audio is one-way — see below |
-| `SIP_LOCAL_NET` | *(empty)* | Subnet to treat as local, e.g. `192.168.0.0/16` |
-| `ZORKPBX_TTS_ENGINE` | `piper` | `espeak`, `piper` or `gtts`. Defaults to piper on amd64; arm64 images have no piper and use espeak |
+| `ZORKPBX_TTS_ENGINE` | `espeak` | `espeak`, or `gtts` for Google's cloud voice (needs outbound internet) |
+| `ZORKPBX_WHISPER_MODEL` | `tiny` | Must match a `ggml-<name>.bin` present in the model directory |
 | `ZORKPBX_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 
 The full set of `ZORKPBX_*` knobs (call limits, audio cache size, recording
-length, whisper model) is documented in
-[upstream's `.env.example`](https://github.com/aejx00/zorkpbx/blob/main/.env.example);
-all of them work here as plain container environment variables.
+length) is documented in
+[upstream's `.env.example`](https://github.com/aejx00/zorkpbx/blob/main/.env.example).
+They all work here as plain container environment variables — Asterisk
+fork/execs the AGI script, so it inherits the container's environment. Note
+that the `.env` *file* upstream describes is only read by their systemd unit,
+never in local-AGI mode, so this image does not ship one.
 
 Mount points worth knowing:
 
 | Path | Contents |
 | --- | --- |
 | `/opt/zorkpbx/saves` | Game saves, one per caller ID. Mount this to keep progress |
-| `/opt/zorkpbx/audio` | TTS cache. Large and regenerable — a named volume is ideal |
+| `/opt/zorkpbx/audio` | TTS cache, in a per-engine subdirectory. Regenerable — a named volume is ideal |
 | `/opt/zorkpbx/games` | Zork I/II/III, already baked in. Mount only to substitute your own `.DAT`/`.z5` files |
 | `/usr/local/share/whisper-models` | The bundled `ggml-*.bin`. Mount to supply a different model, then set `ZORKPBX_WHISPER_MODEL` |
 
 ## Platform support
 
-| Platform | TTS | Voice input | Notes |
-| --- | --- | --- | --- |
-| `linux/amd64` | piper (neural) | yes | Full image |
-| `linux/arm64` | espeak | yes | Apple Silicon, Raspberry Pi 4/5 |
-
-Piper ships glibc-linked binaries, and the only maintained glibc-on-musl shim
-for Alpine ([`sgerrand/alpine-pkg-glibc`](https://github.com/sgerrand/alpine-pkg-glibc))
-publishes x86_64 packages only. So arm64 builds use espeak, which is robotic
-but perfectly intelligible — and arguably more in period. Everything else,
-whisper.cpp voice input included, is identical. If you want the neural voice on
-an Apple Silicon Mac, run the amd64 image under emulation with
-`--platform linux/amd64`.
+Published for **linux/amd64** and **linux/arm64**, with identical features on
+both — Apple Silicon and Raspberry Pi included.
 
 ## Building it yourself
 
@@ -112,23 +100,27 @@ Useful build arguments:
 
 | Argument | Default | Effect |
 | --- | --- | --- |
-| `WITH_PIPER` | `auto` | `auto` = piper on amd64 only. `0` drops piper, its voice model and the glibc layer (~110 MB smaller). `1` forces it and fails the build on non-amd64 |
-| `WITH_WHISPER` | `1` | `0` drops whisper.cpp and the model — no voice input |
+| `WITH_WHISPER` | `1` | `0` drops whisper.cpp and its model — no voice input |
 | `WITH_BUNDLED_ZORK` | `1` | `0` ships no game files; mount your own into `/opt/zorkpbx/games` |
-| `ALPINE_VERSION` | `3.23` | Base image tag |
-| `PIPER_VOICE` | `en_US-norman-medium` | Any voice from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) `en/en_US` |
-| `WHISPER_MODEL` | `small` | `tiny` (~75 MB), `base` (~148 MB) or `small` (~466 MB). Bigger is markedly more accurate on 8 kHz telephone audio, and slower |
+| `WHISPER_MODEL` | `tiny` | `tiny` (~75 MB), `base` (~148 MB) or `small` (~466 MB). Bigger is markedly more accurate on 8 kHz telephone audio, and slower |
+| `ALPINE_VERSION` | `3.20` | Base image tag |
 
 Smallest useful build:
 
 ```bash
-docker build --build-arg WITH_PIPER=0 --build-arg WITH_WHISPER=0 \
-             -t zorkpbx-docker:mini .
+docker build --build-arg WITH_WHISPER=0 -t zorkpbx-docker:mini .
 ```
 
 Everything the build downloads — ZorkPBX, frotz, whisper.cpp, the Zork story
 files — is pinned to an exact commit or tag, so a rebuild produces the same
 thing months later.
+
+Two notes if you change `ALPINE_VERSION`. Alpine 3.20 is past end-of-life, so it
+no longer receives security updates; it is pinned because it is the version this
+image is known-good on. And from 3.21 onwards Alpine moved the packaged Asterisk
+prompts out of `astdatadir`, which silently breaks voice input — the build
+asserts that `beep` is still resolvable and fails loudly rather than shipping
+that, so a bump will tell you if it needs attention.
 
 ## Troubleshooting
 
@@ -141,17 +133,17 @@ wsl -l -v                                       # find the distro name
 wsl -d podman-machine-default ip -4 addr show   # find its IP
 ```
 
-**The call connects but there is no audio, or audio only one way.** Asterisk
-only knows its private container IP and advertises that address for the media
-stream, so RTP from your phone goes nowhere. Set `SIP_EXTERNAL_IP` to the
-address your phone actually dials:
+**The call connects but there is no audio, or audio only one way.** Check that
+the RTP range `10000-10020/udp` is published — it is easy to forget when writing
+a `docker run` by hand. If the phone is not on the container's network, Asterisk
+may also be advertising its private container address for the media stream.
 
-```bash
-docker run ... -e SIP_EXTERNAL_IP=192.168.1.20 ghcr.io/gschmidl/zorkpbx-docker:latest
-```
-
-Also check that the RTP range `10000-10020/udp` is published — it is easy to
-forget when writing a `docker run` by hand.
+**Spoken commands come back as confident nonsense.** The default `tiny` model is
+working from 8 kHz telephone audio, which is the narrowest input whisper ever
+sees, and it will return fluent, wrong English rather than nothing. Rebuild with
+`--build-arg WHISPER_MODEL=small` (or mount a bigger `ggml-*.bin` and point
+`ZORKPBX_WHISPER_MODEL` at it). The app reads the transcript back to you as
+confirmation, so what you hear spoken is exactly what it understood.
 
 **`no matching manifest for linux/arm64/v8`.** An old, amd64-only build.
 `docker pull ghcr.io/gschmidl/zorkpbx-docker:latest` now serves both amd64 and
@@ -172,34 +164,6 @@ cosign verify ghcr.io/gschmidl/zorkpbx-docker:latest \
   --certificate-identity-regexp 'https://github\.com/gschmidl/zorkpbx-docker/.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
-
-**The voice sounds robotic.** That is espeak, the fallback. amd64 images use
-piper; check `docker logs zorkpbx | grep "TTS engine"`. On arm64 there is no
-piper (see Platform support), and `ZORKPBX_TTS_ENGINE=piper` will refuse to
-start rather than pretend.
-
-**The voice changes between phrases.** The TTS cache is keyed on the text
-alone, so a clip synthesised by one engine keeps replaying in that engine's
-voice forever. Each engine and piper voice now gets its own cache
-subdirectory, but a volume written before that change still holds loose
-`.ulaw` files at its root. They are pure cache — delete them:
-
-```bash
-docker compose down && docker volume rm zorkpbx-audio
-```
-
-**Every spoken command answers "Sorry, I didn't catch that", but the beep
-plays.** The recording is fine and speech recognition is failing. Check the
-startup line:
-
-```bash
-docker logs zorkpbx | grep "voice input"
-```
-
-`voice input: ready` means whisper works. A self-test failure reports the exit
-code; 132 (SIGILL) means whisper-cli needs CPU instructions this machine does
-not have. Voice input requires an x86-64 CPU with **AVX2/FMA** (anything since
-roughly 2013) or any arm64. The keypad works regardless.
 
 ## Security
 
@@ -222,6 +186,6 @@ punctuation are safe.
   one's `LICENSE` is copied next to it in `/opt/zorkpbx/games`.
 * [Frotz](https://gitlab.com/DavidGriffith/frotz) (GPL-2.0),
   [whisper.cpp](https://github.com/ggerganov/whisper.cpp) (MIT),
-  [piper](https://github.com/rhasspy/piper) (MIT), Asterisk (GPL-2.0).
+  Asterisk (GPL-2.0), espeak (GPL-3.0).
 
 The packaging in this repository is MIT licensed — see [LICENSE](LICENSE).
