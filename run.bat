@@ -1,11 +1,6 @@
 @echo off
 setlocal
 
-rem ─────────────────────────────────────────────────────────────────────────
-rem  Start zorkpbx on Windows with Podman or Docker, whichever is installed.
-rem  Edit the two values below if you want different credentials.
-rem ─────────────────────────────────────────────────────────────────────────
-
 set "SIP_USER=6001"
 set "SIP_PASSWORD=infocom"
 
@@ -14,22 +9,17 @@ set "NAME=zorkpbx"
 
 cd /d "%~dp0"
 
-rem ── Pick a container engine ──────────────────────────────────────────────
 set "ENGINE="
 where podman >nul 2>&1 && set "ENGINE=podman"
 if not defined ENGINE where docker >nul 2>&1 && set "ENGINE=docker"
 if not defined ENGINE (
   echo Neither podman nor docker was found on PATH.
   echo   winget install -e --id RedHat.Podman
+  pause
   exit /b 1
 )
 echo Using %ENGINE%.
 
-rem ── Is the engine actually up? ───────────────────────────────────────────
-rem A fresh Podman install has no virtual machine until `podman machine init`,
-rem and Docker Desktop may simply not be running. Both fail every later step
-rem with errors that read like a network or registry problem, so check once and
-rem say what is actually wrong.
 %ENGINE% info >nul 2>&1
 if errorlevel 1 (
   echo.
@@ -41,18 +31,12 @@ if errorlevel 1 (
   ) else (
     echo Start Docker Desktop and wait for it to report "running", then try again.
   )
+  pause
   exit /b 1
 )
 
 if not exist "saves" mkdir "saves"
 
-rem ── Always pull ──────────────────────────────────────────────────────────
-rem The tag is :latest, so "is it already local?" is the wrong question — a
-rem stale local copy is exactly how you end up running an old image and
-rem wondering why a fix did not land. Pulling an up-to-date image only costs a
-rem manifest check. Set SKIP_PULL=1 to work offline.
-rem
-rem (`image inspect` rather than `image exists`: the latter is podman-only.)
 if defined SKIP_PULL (
   echo Skipping pull ^(SKIP_PULL is set^).
 ) else (
@@ -65,9 +49,10 @@ if defined SKIP_PULL (
       echo Could not pull %IMAGE%, and there is no local copy.
       echo To build it locally instead:
       echo   %ENGINE% build -t %IMAGE% .
+      pause
       exit /b 1
     )
-    echo Pull failed - falling back to the local copy.
+    echo Pull failed - falling back to the local copy.    
   )
 )
 
@@ -86,19 +71,39 @@ echo Starting %NAME%...
 if errorlevel 1 (
   echo.
   echo Failed to start the container.
+  pause
   exit /b 1
 )
 
-rem `ping`, not `timeout`: timeout aborts with "input redirection is not
-rem supported" whenever this script runs with stdin redirected (a pipe, a CI
-rem step, or cmd /c from another shell).
 ping -n 6 127.0.0.1 >nul 2>&1
 
-echo.
-%ENGINE% logs %NAME% 2>&1 | findstr /c:"[zorkpbx]"
-echo.
-echo Register a softphone to udp://^<this-host^>:5060 as %SIP_USER% / %SIP_PASSWORD%, then dial 5001.
+set "HOSTIP="
+set "HOSTHINT="
+if /i "%ENGINE%"=="podman" (
+  set "HOSTHINT=wsl -d podman-machine-default hostname -I"
+  for /f "tokens=4" %%i in ('wsl -d podman-machine-default ip -4 -o addr show eth0 2^>nul') do set "HOSTIP=%%i"
+  if not defined HOSTIP for /f "tokens=1" %%i in ('wsl -d podman-machine-default hostname -I 2^>nul') do set "HOSTIP=%%i"
+) else (
+  set "HOSTHINT=ipconfig"
+  set "HOSTIP=localhost"
+)
+
+if defined HOSTIP for /f "delims=/ " %%i in ("%HOSTIP%") do set "HOSTIP=%%i"
+if defined HOSTIP (
+  echo %HOSTIP%| findstr /r /c:"^localhost$" /c:"^[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*$" >nul
+  if errorlevel 1 set "HOSTIP="
+)
+
+if defined HOSTIP (
+  echo Register a softphone to udp://%HOSTIP%:5060 as %SIP_USER% / %SIP_PASSWORD%, then dial 5001.
+  if /i "%ENGINE%"=="podman" echo That address belongs to the podman machine and changes when it restarts.
+) else (
+  echo Register a softphone to udp://[host-address]:5060 as %SIP_USER% / %SIP_PASSWORD%, then dial 5001.
+  echo Could not read the host address automatically. Get it with:
+  echo   %HOSTHINT%
+)
 echo Logs:  %ENGINE% logs -f %NAME%
 echo Stop:  %ENGINE% rm -f %NAME%
+pause
 
 endlocal

@@ -34,11 +34,11 @@ chown asterisk:asterisk "$ZORKPBX_AUDIO_DIR" 2>/dev/null || true
 log "TTS engine: ${ZORKPBX_TTS_ENGINE}  (cache: ${ZORKPBX_AUDIO_DIR})"
 
 # Clips left at the volume root by an older layout are now unreachable. They
-# are pure cache, so say so rather than silently wasting the space.
+# are pure cache, so reclaim the space instead of carrying it forever.
 stale_clips="$(find "$audio_base" -maxdepth 1 -name '*.ulaw' 2>/dev/null | wc -l)"
 if [ "$stale_clips" -gt 0 ]; then
-  log "note: ${stale_clips} unused clip(s) from an older cache layout are in the"
-  log "      audio volume root. They are regenerable cache and safe to delete."
+  find "$audio_base" -maxdepth 1 -name '*.ulaw' -delete 2>/dev/null || true
+  log "removed ${stale_clips} unused clip(s) left in the audio volume root by an older cache layout"
 fi
 
 # ── SIP credentials ────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ awk '
 chmod 640 /etc/asterisk/pjsip.conf
 chown root:asterisk /etc/asterisk/pjsip.conf 2>/dev/null || true
 
-log "Register a softphone to udp://<this-host>:5060, then dial 5001."
+log "Ready: register a softphone to port 5060/udp on the machine hosting this container, then dial 5001."
 
 # ── Logging: stream the asterisk log into `docker logs` ────────────────────
 touch /var/log/asterisk/full
